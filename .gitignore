@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets -- never commit these
+.env
+config/credentials.json
+config/token.json
+
+# Runtime output
+logs/
+output/
