@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job that runs main.py every 10 minutes.
+
+  Paths below are absolute, matching this project's location on
+  andrewadkins's Mac (~/Documents/hr-agent). If you move the project,
+  update ProgramArguments, WorkingDirectory, StandardOutPath, and
+  StandardErrorPath to match: launchd does not expand ~ or $HOME.
+
+  main.py's own schedule.enabled setting (edited via the control panel,
+  webapp/app.py) decides which of these 10 minute triggers actually do
+  any Gmail/Claude work versus logging one "skipped" line and exiting.
+  This plist only controls how often it's triggered at all.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.hragent.triage</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/andrewadkins/Documents/hr-agent/.venv/bin/python3</string>
+        <string>/Users/andrewadkins/Documents/hr-agent/main.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/andrewadkins/Documents/hr-agent</string>
+
+    <!-- Seconds between runs. -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <!-- Also run once immediately when the job is loaded. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/andrewadkins/Documents/hr-agent/logs/launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/andrewadkins/Documents/hr-agent/logs/launchd.err.log</string>
+</dict>
+</plist>

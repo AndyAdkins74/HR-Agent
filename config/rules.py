@@ -9,16 +9,28 @@ the agent picks up edits on its very next run without a restart.
 Part of the configuration layer: no Gmail/OAuth or Anthropic imports
 here, just stdlib.
 """
+import datetime as dt
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from config import settings
 
 RULES_FILE_PATH = Path(
     os.environ.get("HR_AGENT_RULES_PATH", str(settings.BASE_DIR / "config" / "rules.json"))
 )
+
+# Monday-first, matching datetime.weekday().
+DAY_NAMES = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+]
 
 DEFAULT_RULES: Dict[str, Any] = {
     "classification_prompt": (
@@ -55,6 +67,25 @@ DEFAULT_RULES: Dict[str, Any] = {
     "folder_mappings": {
         "default": settings.ATTACHMENT_OUTPUT_DIR,
     },
+    # When "enabled" is False (the default), the agent runs whenever it's
+    # triggered, on any day, at any time -- unchanged from before this
+    # feature existed. When True, main.py only does any Gmail/Claude work
+    # if the current day and time fall inside that day's window(s); a
+    # trigger outside those hours logs one line and does nothing else, so
+    # e.g. a launchd job firing every 10 minutes only actually costs a
+    # Claude API call during hours you've allowed.
+    "schedule": {
+        "enabled": False,
+        "windows": {
+            "monday": "09:00-17:00",
+            "tuesday": "09:00-17:00",
+            "wednesday": "09:00-17:00",
+            "thursday": "09:00-17:00",
+            "friday": "09:00-17:00",
+            "saturday": "",
+            "sunday": "",
+        },
+    },
 }
 
 
@@ -77,6 +108,15 @@ def load_rules() -> Dict[str, Any]:
     merged.update(rules)
     if "default" not in merged.get("folder_mappings", {}):
         merged["folder_mappings"]["default"] = DEFAULT_RULES["folder_mappings"]["default"]
+
+    schedule = merged.get("schedule", {})
+    windows = schedule.get("windows", {})
+    for day in DAY_NAMES:
+        windows.setdefault(day, "")
+    schedule["windows"] = windows
+    schedule.setdefault("enabled", False)
+    merged["schedule"] = schedule
+
     return merged
 
 
@@ -85,3 +125,47 @@ def save_rules(rules: Dict[str, Any]) -> None:
     with open(RULES_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(rules, f, indent=2)
         f.write("\n")
+
+
+def _parse_windows(windows_text: str):
+    """Parse "09:00-17:00, 18:00-19:00" into a list of (start, end) times.
+    Malformed entries are skipped rather than raising, since this runs on
+    every trigger and a typo in the control panel shouldn't take the whole
+    schedule check down."""
+    parsed = []
+    for window in windows_text.split(","):
+        window = window.strip()
+        if not window or "-" not in window:
+            continue
+        start_str, _, end_str = window.partition("-")
+        try:
+            start = dt.datetime.strptime(start_str.strip(), "%H:%M").time()
+            end = dt.datetime.strptime(end_str.strip(), "%H:%M").time()
+        except ValueError:
+            continue
+        parsed.append((start, end))
+    return parsed
+
+
+def is_within_schedule(rules: Dict[str, Any], now: Optional[dt.datetime] = None) -> bool:
+    """True if the agent is allowed to do any work right now.
+
+    If schedule.enabled is False, always True (unrestricted -- the
+    original, pre-schedule behaviour). Otherwise, checks the current
+    local day-of-week against that day's configured windows. An empty or
+    absent window for a day means no processing that day. Windows that
+    span midnight (e.g. "22:00-02:00") are not supported -- split them
+    into two same-day windows instead.
+    """
+    schedule = rules.get("schedule", {})
+    if not schedule.get("enabled", False):
+        return True
+
+    now = now or dt.datetime.now()
+    day_name = DAY_NAMES[now.weekday()]
+    windows_text = schedule.get("windows", {}).get(day_name, "")
+
+    for start, end in _parse_windows(windows_text):
+        if start <= now.time() <= end:
+            return True
+    return False

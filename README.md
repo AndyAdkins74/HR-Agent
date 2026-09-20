@@ -74,13 +74,19 @@ If you generated `token.json` on a different machine to the one running
 
 ### 4. Set your Claude API key
 
+Copy `.env.example` to `.env` in the project root and fill in your key:
+
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env
+# then edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+chmod 600 .env
 ```
 
-(Or put it in a `.env` file copied from `.env.example` and load it
-yourself, e.g. `export $(cat .env | xargs)` -- `main.py` does not read
-`.env` automatically.)
+`config/settings.py` loads `.env` automatically on every run (it's
+git-ignored, never committed) -- this is what makes the launchd job
+below possible, since a scheduled job has no interactive terminal to
+`export` a key into. A real environment variable, if you set one, still
+takes precedence over `.env`.
 
 ### 5. Run the agent
 
@@ -176,18 +182,72 @@ then open <http://127.0.0.1:5151/>. The form has three parts:
   line). The classifier picks one of these category names whenever it
   decides to save an attachment, so e.g. CVs and payslips can land in
   different folders.
+- **Schedule** -- an optional per-day-of-week allow-list of time
+  windows (e.g. Monday `09:00-17:00`) during which the agent is
+  actually allowed to do any Gmail/Claude work. This applies no matter
+  how `main.py` gets triggered -- manually or via the launchd job
+  below. Leave the "Only run during these windows" box unchecked (the
+  default) to run any time it's triggered, unrestricted.
 
 `config/rules.json` is git-ignored (it's local runtime state, not a
 secret) and is created automatically with sensible defaults the first
 time either `main.py` or the control panel runs, if it doesn't already
 exist.
 
+## Always-on scheduling (launchd)
+
+`main.py` itself is a one-shot script -- it processes whatever's
+currently fetchable and exits. To have it run automatically every 10
+minutes on macOS (rather than typing `python3 main.py` by hand each
+time), use the provided `launchd` job:
+
+```bash
+cp launchd/com.hragent.triage.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.hragent.triage.plist
+```
+
+This runs `main.py` once immediately, then every 10 minutes, using the
+absolute paths baked into the plist (`~/Documents/hr-agent`) -- edit
+`launchd/com.hragent.triage.plist` first if your checkout lives
+somewhere else, since launchd does not expand `~` or environment
+variables. It reads `ANTHROPIC_API_KEY` from `.env` (see step 4 above),
+so make sure that's set up before loading it.
+
+Check it's running and see its output:
+
+```bash
+launchctl list | grep hragent
+tail -f logs/launchd.out.log logs/launchd.err.log logs/decisions.log
+```
+
+Stop it with:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.hragent.triage.plist
+```
+
+Two things worth knowing:
+
+- This 10-minute cadence is *when it's triggered*, not *when it does
+  work*. Use the control panel's **Schedule** section to restrict which
+  of those triggers actually process email (e.g. only weekday office
+  hours) -- outside those windows each trigger just logs one "skipped"
+  line and exits, so it costs nothing beyond that.
+- Your Gmail OAuth token is on a 7-day expiry (per the app's Testing
+  publishing status) -- an always-on job will start failing quietly at
+  that point. Check `logs/decisions.log` / `logs/launchd.err.log`
+  periodically, or move the Google Cloud OAuth consent screen out of
+  Testing if you want this to run unattended for longer.
+
 ## Status
 
-Both the core triage loop and this control panel have been built and
-reviewed. The end-to-end loop (fetch, classify, act, label, log) has
-been run against a real test Gmail inbox and its output confirmed. The
-control panel has not yet been run against a real inbox, since this
-build session has no browser and no Gmail/Claude credentials -- run
-through the steps above and confirm an edited prompt/criteria/folder
-mapping actually changes the next `python main.py` run's behaviour.
+The core triage loop, the control panel, and the always-on scheduling
+have all been built and reviewed. The end-to-end loop (fetch, classify,
+act, label, log) and the control panel (edit prompt/criteria/folder
+mapping, confirm it changes the next run's behaviour with no restart)
+have both been run against a real test Gmail inbox and confirmed
+working. The launchd job and the Schedule control-panel section have
+not yet been run for real, since this build session has no macOS
+environment to load a launchd job into -- install it per the steps
+above and confirm it fires every 10 minutes and respects a configured
+schedule window.

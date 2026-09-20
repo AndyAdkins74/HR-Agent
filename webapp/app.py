@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from flask import Flask, redirect, render_template, request, url_for
 
-from config.rules import load_rules, save_rules
+from config.rules import DAY_NAMES, load_rules, save_rules
 
 app = Flask(__name__)
 
@@ -53,12 +53,15 @@ def _text_to_mappings(text: str) -> dict:
 def index():
     rules = load_rules()
     folder_mappings = rules.get("folder_mappings", {})
+    schedule = rules.get("schedule", {})
     return render_template(
         "index.html",
         classification_prompt=rules.get("classification_prompt", ""),
         hr_criteria_text=_criteria_to_text(rules.get("hr_criteria", [])),
         default_folder=folder_mappings.get("default", ""),
         extra_mappings_text=_mappings_to_text(folder_mappings),
+        schedule_enabled=schedule.get("enabled", False),
+        schedule_days=[(day, schedule.get("windows", {}).get(day, "")) for day in DAY_NAMES],
         saved=request.args.get("saved") == "1",
     )
 
@@ -74,6 +77,11 @@ def save():
     folder_mappings = _text_to_mappings(request.form.get("extra_mappings", ""))
     folder_mappings["default"] = default_folder or rules["folder_mappings"].get("default", "")
     rules["folder_mappings"] = folder_mappings
+
+    rules["schedule"] = {
+        "enabled": request.form.get("schedule_enabled") == "on",
+        "windows": {day: request.form.get(f"schedule_{day}", "").strip() for day in DAY_NAMES},
+    }
 
     save_rules(rules)
     return redirect(url_for("index", saved="1"))

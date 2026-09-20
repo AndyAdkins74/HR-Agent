@@ -14,6 +14,27 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _load_env_file(path: Path) -> None:
+    """Populate os.environ from a simple KEY=VALUE file, without overriding
+    variables already set in the real environment. This exists so a
+    launchd job (which has no interactive shell to `read -rs` a key into)
+    can pick up ANTHROPIC_API_KEY from a git-ignored .env file instead."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_env_file(BASE_DIR / ".env")
+
 # --- Active connector -------------------------------------------------
 # Which mail connector implementation the agent should use. Only "gmail"
 # is implemented today; a future connector would add its own module under

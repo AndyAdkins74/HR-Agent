@@ -14,7 +14,7 @@ from pathlib import Path
 from types import ModuleType
 
 from config import settings
-from config.rules import load_rules
+from config.rules import is_within_schedule, load_rules
 from decision.engine import EmailInput, classify
 
 
@@ -71,6 +71,12 @@ def _log_decision(logger: logging.Logger, email, decision, action_taken: str) ->
 
 def run() -> None:
     logger = _setup_logger()
+    rules = load_rules()
+
+    if not is_within_schedule(rules):
+        logger.info("Outside configured schedule window; skipping this run.")
+        return
+
     connector = _load_connector(settings.ACTIVE_CONNECTOR)
 
     emails = connector.get_emails()
@@ -99,7 +105,7 @@ def run() -> None:
 
         actions_taken = []
         if decision.action == "save_attachments" and decision.attachments_to_save:
-            folder_mappings = load_rules().get("folder_mappings", {})
+            folder_mappings = rules.get("folder_mappings", {})
             output_dir = folder_mappings.get(decision.folder_category, folder_mappings.get("default"))
             attachments_by_name = {a.filename: a for a in email.attachments}
             for filename in decision.attachments_to_save:

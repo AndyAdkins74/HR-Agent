@@ -44,6 +44,10 @@
       border-radius: 4px;
       margin-bottom: 1rem;
     }
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0 1rem; }
+    .checkbox-row label { display: inline; font-weight: 600; margin: 0; }
+    .schedule-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 0.75rem; margin: 0.4rem 0; }
+    .schedule-row label { margin: 0; font-weight: normal; text-transform: capitalize; }
   </style>
 </head>
 <body>
@@ -76,6 +80,27 @@
       <label for="extra_mappings">Additional categories (one per line: <code>category = folder/path</code>)</label>
       <small>The classifier picks one of these category names when it saves an attachment.</small>
       <textarea id="extra_mappings" name="extra_mappings" rows="6" placeholder="recruitment = output/hr_attachments/recruitment&#10;payroll = output/hr_attachments/payroll">{{ extra_mappings_text }}</textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Schedule</legend>
+      <div class="checkbox-row">
+        <input type="checkbox" id="schedule_enabled" name="schedule_enabled" {% if schedule_enabled %}checked{% endif %}>
+        <label for="schedule_enabled">Only run during these windows</label>
+      </div>
+      <small>
+        Applies however the agent gets triggered (manually or via a scheduler like launchd)
+        &mdash; outside these windows it logs one line and does no Gmail/Claude work.
+        Format per day: <code>09:00-17:00</code>, or multiple comma-separated ranges
+        (<code>09:00-12:00, 13:00-17:00</code>). Leave a day blank for no processing that day.
+        Unchecked, the agent runs any time it's triggered.
+      </small>
+      {% for day, windows_text in schedule_days %}
+        <div class="schedule-row">
+          <label for="schedule_{{ day }}">{{ day }}</label>
+          <input type="text" id="schedule_{{ day }}" name="schedule_{{ day }}" value="{{ windows_text }}" placeholder="e.g. 09:00-17:00">
+        </div>
+      {% endfor %}
     </fieldset>
 
     <button type="submit">Save</button>
