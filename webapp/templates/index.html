@@ -29,15 +29,20 @@
         <code>.../Processed</code>, <code>.../Review</code>) applied
         automatically based on the outcome &mdash; nothing to configure here.
       </small>
+      <div class="subagent-tabs" id="subagent-tabs">
+        {% for agent in sub_agents %}
+          <button type="button" class="subagent-tab {{ 'active' if loop.first else '' }}" data-index="{{ loop.index0 }}" onclick="showSubagent({{ loop.index0 }})">{{ agent.name or ('Sub-agent ' ~ loop.index) }}</button>
+        {% endfor %}
+      </div>
       <div id="subagent-list">
         {% for agent in sub_agents %}
-          <div class="subagent-card" data-index="{{ loop.index0 }}">
+          <div class="subagent-card" data-index="{{ loop.index0 }}" {{ '' if loop.first else 'hidden' }}>
             <div class="subagent-head">
               <span>Sub-agent {{ loop.index }}</span>
-              <button type="button" class="remove-btn" onclick="this.closest('.subagent-card').remove()">Remove</button>
+              <button type="button" class="remove-btn" onclick="removeSubagent({{ loop.index0 }})">Remove</button>
             </div>
             <label for="subagent_name_{{ loop.index0 }}">Name</label>
-            <input type="text" id="subagent_name_{{ loop.index0 }}" name="subagent_name_{{ loop.index0 }}" value="{{ agent.name }}" placeholder="e.g. Recruitment & Onboarding">
+            <input type="text" id="subagent_name_{{ loop.index0 }}" name="subagent_name_{{ loop.index0 }}" value="{{ agent.name }}" placeholder="e.g. Recruitment & Onboarding" oninput="renameSubagentTab({{ loop.index0 }}, this.value)">
             <label for="subagent_description_{{ loop.index0 }}">Description (shown to the orchestrator for routing)</label>
             <input type="text" id="subagent_description_{{ loop.index0 }}" name="subagent_description_{{ loop.index0 }}" value="{{ agent.description }}" placeholder="e.g. Hiring, interviews, CVs, onboarding">
             <label for="subagent_prompt_{{ loop.index0 }}">Prompt (full instructions for this sub-agent)</label>
@@ -93,24 +98,66 @@
   <script>
     let subagentCount = {{ sub_agents|length }};
 
+    function showSubagent(index) {
+      index = String(index);
+      document.querySelectorAll('#subagent-list > .subagent-card').forEach((card) => {
+        card.hidden = card.dataset.index !== index;
+      });
+      document.querySelectorAll('#subagent-tabs > .subagent-tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.index === index);
+      });
+    }
+
+    function renameSubagentTab(index, name) {
+      const tab = document.querySelector(`#subagent-tabs > .subagent-tab[data-index="${index}"]`);
+      if (tab) tab.textContent = name.trim() || `Sub-agent ${index + 1}`;
+    }
+
+    function removeSubagent(index) {
+      index = String(index);
+      const tabs = document.getElementById('subagent-tabs');
+      const tab = tabs.querySelector(`.subagent-tab[data-index="${index}"]`);
+      const card = document.querySelector(`#subagent-list > .subagent-card[data-index="${index}"]`);
+      const wasActive = tab && tab.classList.contains('active');
+
+      if (tab) tab.remove();
+      if (card) card.remove();
+
+      if (wasActive) {
+        const nextTab = tabs.querySelector('.subagent-tab');
+        if (nextTab) showSubagent(nextTab.dataset.index);
+      }
+    }
+
     function addSubagent() {
       const index = subagentCount++;
-      const list = document.getElementById('subagent-list');
+
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'subagent-tab';
+      tab.dataset.index = String(index);
+      tab.textContent = 'New sub-agent';
+      tab.onclick = () => showSubagent(index);
+      document.getElementById('subagent-tabs').appendChild(tab);
+
       const card = document.createElement('div');
       card.className = 'subagent-card';
+      card.dataset.index = String(index);
       card.innerHTML = `
         <div class="subagent-head">
           <span>New sub-agent</span>
-          <button type="button" class="remove-btn" onclick="this.closest('.subagent-card').remove()">Remove</button>
+          <button type="button" class="remove-btn" onclick="removeSubagent(${index})">Remove</button>
         </div>
         <label for="subagent_name_${index}">Name</label>
-        <input type="text" id="subagent_name_${index}" name="subagent_name_${index}" placeholder="e.g. Recruitment & Onboarding">
+        <input type="text" id="subagent_name_${index}" name="subagent_name_${index}" placeholder="e.g. Recruitment & Onboarding" oninput="renameSubagentTab(${index}, this.value)">
         <label for="subagent_description_${index}">Description (shown to the orchestrator for routing)</label>
         <input type="text" id="subagent_description_${index}" name="subagent_description_${index}" placeholder="e.g. Hiring, interviews, CVs, onboarding">
         <label for="subagent_prompt_${index}">Prompt (full instructions for this sub-agent)</label>
         <textarea id="subagent_prompt_${index}" name="subagent_prompt_${index}" rows="10"></textarea>
       `;
-      list.appendChild(card);
+      document.getElementById('subagent-list').appendChild(card);
+
+      showSubagent(index);
     }
   </script>
 {% endblock %}
