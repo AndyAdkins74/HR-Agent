@@ -17,6 +17,15 @@ from config import settings
 from config.rules import is_within_schedule, load_rules, record_run, should_throttle
 from decision.engine import EmailInput, classify
 
+# Which Gmail sub-folder (nested under settings.GMAIL_FOLDER_PREFIX/<sub-agent
+# name>/) each decided action lands an email in. Applied in addition to,
+# not instead of, the dedup Processed/NeedsReview labels.
+ACTION_TO_FOLDER = {
+    "none": "Not Processed",
+    "save_attachments": "Processed",
+    "flag_for_review": "Review",
+}
+
 
 def _load_connector(name: str) -> ModuleType:
     if name == "gmail":
@@ -127,6 +136,11 @@ def run() -> None:
         elif decision.action == "flag_for_review":
             connector.flag_for_review(email.message_id)
             actions_taken.append("flagged_for_review")
+
+        if decision.subagent != "none":
+            folder_suffix = ACTION_TO_FOLDER.get(decision.action, "Not Processed")
+            folder_label = f"{settings.GMAIL_FOLDER_PREFIX}/{decision.subagent}/{folder_suffix}"
+            connector.apply_folder_label(email.message_id, folder_label)
 
         action_taken_summary = "; ".join(actions_taken) if actions_taken else "no_action"
         _log_decision(logger, email, decision, action_taken_summary)

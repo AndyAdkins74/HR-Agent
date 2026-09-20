@@ -195,6 +195,20 @@ def flag_for_review(message_id: str, label_name: Optional[str] = None) -> None:
     ).execute()
 
 
+def apply_folder_label(message_id: str, label_name: str) -> None:
+    """Apply an arbitrary label to a message, creating it first if needed.
+    A label name containing "/" (e.g. "HR-Agent/Payroll/Processed") nests
+    under Gmail's sidebar as a sub-folder of the part(s) before the last
+    "/", which is how this is used to file each email under its handling
+    sub-agent and outcome -- purely for visual organisation in Gmail, on
+    top of (not instead of) the dedup Processed/NeedsReview labels."""
+    service = _service()
+    label_id = _get_or_create_label(service, label_name)
+    service.users().messages().modify(
+        userId="me", id=message_id, body={"addLabelIds": [label_id]}
+    ).execute()
+
+
 def remove_label_from_matching(label_name: str, query: Optional[str] = None) -> int:
     """Remove `label_name` from every message currently carrying it (optionally
     narrowed by `query`). Used to force re-triage of previously seen emails

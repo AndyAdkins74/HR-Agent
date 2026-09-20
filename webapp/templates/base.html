@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}HR-Agent Control Panel{% endblock %}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      max-width: 760px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    body.wide { max-width: 1200px; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+    fieldset { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1.5rem; padding: 1rem 1.25rem; }
+    legend { font-weight: 600; padding: 0 0.4rem; }
+    label { display: block; font-weight: 600; margin: 0.9rem 0 0.25rem; }
+    small { color: #666; }
+    textarea, input[type=text] {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.9rem;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    textarea { resize: vertical; }
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 0.6rem 1.4rem;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: #1662c4; }
+    .banner {
+      background: #e6f4ea;
+      border: 1px solid #34a853;
+      color: #1e4620;
+      padding: 0.6rem 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0 1rem; }
+    .checkbox-row label { display: inline; font-weight: 600; margin: 0; }
+    .schedule-row { display: grid; grid-template-columns: 110px 1fr 190px; align-items: center; gap: 0.75rem; margin: 0.4rem 0; }
+    .schedule-row label { margin: 0; font-weight: normal; text-transform: capitalize; }
+    .schedule-row select { width: 100%; box-sizing: border-box; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .subagent-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1rem; background: #fafafa; }
+    .subagent-card label { margin: 0.6rem 0 0.25rem; }
+    .subagent-card label:first-child { margin-top: 0; }
+    .subagent-head { display: flex; justify-content: space-between; align-items: center; }
+    .subagent-head span { font-weight: 600; color: #555; }
+    .remove-btn {
+      background: none;
+      border: 1px solid #c5221f;
+      color: #c5221f;
+      padding: 0.25rem 0.7rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .remove-btn:hover { background: #fce8e6; }
+    .add-btn {
+      background: none;
+      border: 1px dashed #1a73e8;
+      color: #1a73e8;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    .add-btn:hover { background: #e8f0fe; }
+    nav.tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid #ddd; }
+    nav.tabs a {
+      padding: 0.6rem 1rem;
+      text-decoration: none;
+      color: #555;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+    }
+    nav.tabs a.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+    nav.tabs a:hover { color: #1a73e8; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #eee; vertical-align: top; }
+    th { background: #fafafa; }
+    tr:hover { background: #f5f8ff; }
+    .table-wrap { overflow-x: auto; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <h1>HR-Agent</h1>
+  <nav class="tabs">
+    <a href="{{ url_for('index') }}" class="{{ 'active' if active_tab == 'settings' else '' }}">Settings</a>
+    <a href="{{ url_for('audit') }}" class="{{ 'active' if active_tab == 'audit' else '' }}">Audit Log</a>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>

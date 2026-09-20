@@ -11,6 +11,7 @@ Run with:
     python webapp/app.py
 then open http://127.0.0.1:5151/
 """
+import re
 import sys
 from pathlib import Path
 
@@ -18,9 +19,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from flask import Flask, redirect, render_template, request, url_for
 
+from config import settings
 from config.rules import DAY_NAMES, INTERVAL_CHOICES_MINUTES, load_rules, save_rules
 
 app = Flask(__name__)
+
+# Matches the per-email line format logged by main.py's _log_decision --
+# not the "Fetched N email(s)"/schedule-skip banner lines, which carry no
+# msg_id and are left out of the audit table.
+DECISION_LINE_RE = re.compile(
+    r"^(?P<timestamp>\S+) \| msg_id=(?P<msg_id>.*?) \| from=(?P<from_>.*?) \| "
+    r"subject=(?P<subject>.*?) \| subagent=(?P<subagent>.*?) \| "
+    r"hr_related=(?P<hr_related>.*?) \| decided_action=(?P<decided_action>.*?) \| "
+    r"action_taken=(?P<action_taken>.*?) \| reasoning=(?P<reasoning>.*)$"
+)
+
+AUDIT_LOG_LIMIT = 200
+
+
+def _read_audit_log(limit: int = AUDIT_LOG_LIMIT):
+    path = Path(settings.LOG_FILE_PATH)
+    if not path.exists():
+        return [], False
+
+    matched = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = DECISION_LINE_RE.match(line)
+        if m:
+            matched.append(m.groupdict())
+
+    matched.reverse()  # newest first
+    truncated = len(matched) > limit
+    return matched[:limit], truncated
 
 INTERVAL_LABELS = {
     0: "Every trigger (10 min, default)",
@@ -72,7 +102,14 @@ def index():
         ],
         interval_choices=[(minutes, INTERVAL_LABELS[minutes]) for minutes in INTERVAL_CHOICES_MINUTES],
         saved=request.args.get("saved") == "1",
+        active_tab="settings",
     )
+
+
+@app.route("/audit", methods=["GET"])
+def audit():
+    rows, truncated = _read_audit_log()
+    return render_template("audit.html", rows=rows, truncated=truncated, active_tab="audit")
 
 
 @app.route("/save", methods=["POST"])

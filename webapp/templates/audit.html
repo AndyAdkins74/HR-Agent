@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}HR-Agent Audit Log{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block extra_head %}
+  <meta http-equiv="refresh" content="10">
+{% endblock %}
+{% block content %}
+  <p>
+    <small>
+      Every completed triage decision, newest first, read straight from
+      <code>logs/decisions.log</code> &mdash; this page always matches what the
+      agent actually did. Refreshes automatically every 10 seconds.
+      Showing the last {{ rows|length }} decision(s){% if truncated %} (log has more; oldest ones are not shown){% endif %}.
+    </small>
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Sub-agent</th>
+          <th>From</th>
+          <th>Subject</th>
+          <th>HR-related</th>
+          <th>Decided action</th>
+          <th>Result</th>
+          <th>Reasoning</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>{{ row.timestamp }}</td>
+            <td>{{ row.subagent }}</td>
+            <td>{{ row.from_ }}</td>
+            <td>{{ row.subject }}</td>
+            <td>{{ row.hr_related }}</td>
+            <td>{{ row.decided_action }}</td>
+            <td>{{ row.action_taken }}</td>
+            <td>{{ row.reasoning }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8">No decisions logged yet &mdash; run <code>main.py</code> (or wait for the next scheduled trigger) once there's mail to triage.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

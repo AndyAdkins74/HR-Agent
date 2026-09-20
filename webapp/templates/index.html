@@ -1,84 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>HR-Agent Control Panel</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      max-width: 760px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      color: #1a1a1a;
-    }
-    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-    fieldset { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1.5rem; padding: 1rem 1.25rem; }
-    legend { font-weight: 600; padding: 0 0.4rem; }
-    label { display: block; font-weight: 600; margin: 0.9rem 0 0.25rem; }
-    small { color: #666; }
-    textarea, input[type=text] {
-      width: 100%;
-      box-sizing: border-box;
-      font-family: ui-monospace, Menlo, Consolas, monospace;
-      font-size: 0.9rem;
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    textarea { resize: vertical; }
-    button {
-      background: #1a73e8;
-      color: white;
-      border: none;
-      padding: 0.6rem 1.4rem;
-      border-radius: 4px;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    button:hover { background: #1662c4; }
-    .banner {
-      background: #e6f4ea;
-      border: 1px solid #34a853;
-      color: #1e4620;
-      padding: 0.6rem 1rem;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-    }
-    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0 1rem; }
-    .checkbox-row label { display: inline; font-weight: 600; margin: 0; }
-    .schedule-row { display: grid; grid-template-columns: 110px 1fr 190px; align-items: center; gap: 0.75rem; margin: 0.4rem 0; }
-    .schedule-row label { margin: 0; font-weight: normal; text-transform: capitalize; }
-    .schedule-row select { width: 100%; box-sizing: border-box; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
-    .subagent-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1rem; background: #fafafa; }
-    .subagent-card label { margin: 0.6rem 0 0.25rem; }
-    .subagent-card label:first-child { margin-top: 0; }
-    .subagent-head { display: flex; justify-content: space-between; align-items: center; }
-    .subagent-head span { font-weight: 600; color: #555; }
-    .remove-btn {
-      background: none;
-      border: 1px solid #c5221f;
-      color: #c5221f;
-      padding: 0.25rem 0.7rem;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      cursor: pointer;
-    }
-    .remove-btn:hover { background: #fce8e6; }
-    .add-btn {
-      background: none;
-      border: 1px dashed #1a73e8;
-      color: #1a73e8;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      font-size: 0.9rem;
-      cursor: pointer;
-      width: 100%;
-    }
-    .add-btn:hover { background: #e8f0fe; }
-  </style>
-</head>
-<body>
-  <h1>HR-Agent Control Panel</h1>
+{% extends "base.html" %}
+{% block title %}HR-Agent Control Panel{% endblock %}
+{% block body_class %}{% endblock %}
+{% block content %}
   <p><small>Edits here are saved to <code>config/rules.json</code> and read by the agent on its next run &mdash; neither app needs the other running.</small></p>
 
   {% if saved %}
@@ -101,7 +24,10 @@
         description are what the orchestrator sees when deciding where to route
         an email; the prompt is everything that sub-agent is told once it's
         chosen. At least one sub-agent is required for any email to ever be
-        routed anywhere.
+        routed anywhere. Each sub-agent also gets its own three Gmail labels
+        (<code>HR-Agent/&lt;name&gt;/Not Processed</code>,
+        <code>.../Processed</code>, <code>.../Review</code>) applied
+        automatically based on the outcome &mdash; nothing to configure here.
       </small>
       <div id="subagent-list">
         {% for agent in sub_agents %}
@@ -187,5 +113,4 @@
       list.appendChild(card);
     }
   </script>
-</body>
-</html>
+{% endblock %}

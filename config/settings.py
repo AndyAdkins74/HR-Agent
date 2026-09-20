@@ -67,6 +67,13 @@ GMAIL_QUERY = os.environ.get(
 )
 GMAIL_MAX_RESULTS = int(os.environ.get("GMAIL_MAX_RESULTS", "20"))
 
+# Parent label under which every sub-agent gets its own three nested
+# labels (Not Processed / Processed / Review), e.g.
+# "HR-Agent/Payroll & Benefits/Review" -- shown as sub-folders in Gmail's
+# sidebar. Purely organisational, separate from GMAIL_PROCESSED_LABEL/
+# GMAIL_REVIEW_LABEL above, which drive dedup and are not nested.
+GMAIL_FOLDER_PREFIX = os.environ.get("GMAIL_FOLDER_PREFIX", "HR-Agent")
+
 # --- Attachment storage --------------------------------------------------
 ATTACHMENT_OUTPUT_DIR = os.environ.get(
     "ATTACHMENT_OUTPUT_DIR", str(BASE_DIR / "output" / "hr_attachments")
