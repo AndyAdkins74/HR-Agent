@@ -21,6 +21,21 @@ RULES_FILE_PATH = Path(
     os.environ.get("HR_AGENT_RULES_PATH", str(settings.BASE_DIR / "config" / "rules.json"))
 )
 
+# Tracks when the agent last actually did Gmail/Claude work (as opposed to
+# being triggered and skipping), so schedule.intervals below can throttle
+# runs independently of how often the scheduler (e.g. launchd, every 10
+# minutes) actually triggers main.py. Runtime state, not user config --
+# git-ignored like token.json.
+SCHEDULE_STATE_PATH = Path(
+    os.environ.get(
+        "HR_AGENT_SCHEDULE_STATE_PATH", str(settings.BASE_DIR / "config" / ".schedule_state.json")
+    )
+)
+
+# Selectable in the control panel; 0 means "no extra throttling beyond
+# however often the scheduler triggers the agent" (the original behaviour).
+INTERVAL_CHOICES_MINUTES = [0, 15, 30, 60, 120, 240]
+
 # Monday-first, matching datetime.weekday().
 DAY_NAMES = [
     "monday",
@@ -85,6 +100,9 @@ DEFAULT_RULES: Dict[str, Any] = {
             "saturday": "",
             "sunday": "",
         },
+        # Minutes between actual runs on that day; 0 = every trigger (no
+        # extra throttling). See is_within_schedule/should_throttle below.
+        "intervals": {day: 0 for day in DAY_NAMES},
     },
 }
 
@@ -114,6 +132,15 @@ def load_rules() -> Dict[str, Any]:
     for day in DAY_NAMES:
         windows.setdefault(day, "")
     schedule["windows"] = windows
+
+    intervals = schedule.get("intervals", {})
+    for day in DAY_NAMES:
+        try:
+            intervals[day] = int(intervals.get(day, 0) or 0)
+        except (TypeError, ValueError):
+            intervals[day] = 0
+    schedule["intervals"] = intervals
+
     schedule.setdefault("enabled", False)
     merged["schedule"] = schedule
 
@@ -169,3 +196,97 @@ def is_within_schedule(rules: Dict[str, Any], now: Optional[dt.datetime] = None)
         if start <= now.time() <= end:
             return True
     return False
+
+
+def _load_last_run_at() -> Optional[dt.datetime]:
+    if not SCHEDULE_STATE_PATH.exists():
+        return None
+    try:
+        with open(SCHEDULE_STATE_PATH, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        return dt.datetime.fromisoformat(state["last_run_at"])
+    except (json.JSONDecodeError, KeyError, ValueError, OSError):
+        return None
+
+
+def record_run(now: Optional[dt.datetime] = None) -> None:
+    """Called once main.py has decided to actually do work, so the next
+    trigger can measure elapsed time against schedule.intervals. Must be
+    called at most once per real run -- not on runs skipped by
+    is_within_schedule/should_throttle -- or the interval would never
+    have a chance to elapse."""
+    now = now or dt.datetime.now()
+    SCHEDULE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(SCHEDULE_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"last_run_at": now.isoformat()}, f)
+
+
+def should_throttle(rules: Dict[str, Any], now: Optional[dt.datetime] = None) -> bool:
+    """True if today's configured interval hasn't elapsed since the last
+    real run yet, so this trigger should be skipped even though it falls
+    inside today's window. This is independent of how often the
+    scheduler (e.g. launchd, every 10 minutes) actually triggers main.py
+    -- it throttles on top of that, it doesn't replace it."""
+    schedule = rules.get("schedule", {})
+    if not schedule.get("enabled", False):
+        return False
+
+    now = now or dt.datetime.now()
+    day_name = DAY_NAMES[now.weekday()]
+    interval_minutes = schedule.get("intervals", {}).get(day_name, 0) or 0
+    if interval_minutes <= 0:
+        return False
+
+    last_run = _load_last_run_at()
+    if last_run is None:
+        return False
+
+    elapsed_minutes = (now - last_run).total_seconds() / 60.0
+    return elapsed_minutes < interval_minutes
+
+
+def _load_last_run_at() -> Optional[dt.datetime]:
+    if not SCHEDULE_STATE_PATH.exists():
+        return None
+    try:
+        with open(SCHEDULE_STATE_PATH, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        return dt.datetime.fromisoformat(state["last_run_at"])
+    except (json.JSONDecodeError, KeyError, ValueError, OSError):
+        return None
+
+
+def record_run(now: Optional[dt.datetime] = None) -> None:
+    """Called once main.py has decided to actually do work, so the next
+    trigger can measure elapsed time against schedule.intervals. Must be
+    called at most once per real run -- not on runs skipped by
+    is_within_schedule/should_throttle -- or the interval would never
+    have a chance to elapse."""
+    now = now or dt.datetime.now()
+    SCHEDULE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(SCHEDULE_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"last_run_at": now.isoformat()}, f)
+
+
+def should_throttle(rules: Dict[str, Any], now: Optional[dt.datetime] = None) -> bool:
+    """True if today's configured interval hasn't elapsed since the last
+    real run yet, so this trigger should be skipped even though it falls
+    inside today's window. This is independent of how often the
+    scheduler (e.g. launchd, every 10 minutes) actually triggers main.py
+    -- it throttles on top of that, it doesn't replace it."""
+    schedule = rules.get("schedule", {})
+    if not schedule.get("enabled", False):
+        return False
+
+    now = now or dt.datetime.now()
+    day_name = DAY_NAMES[now.weekday()]
+    interval_minutes = schedule.get("intervals", {}).get(day_name, 0) or 0
+    if interval_minutes <= 0:
+        return False
+
+    last_run = _load_last_run_at()
+    if last_run is None:
+        return False
+
+    elapsed_minutes = (now - last_run).total_seconds() / 60.0
+    return elapsed_minutes < interval_minutes

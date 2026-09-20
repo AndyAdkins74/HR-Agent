@@ -14,7 +14,7 @@ from pathlib import Path
 from types import ModuleType
 
 from config import settings
-from config.rules import is_within_schedule, load_rules
+from config.rules import is_within_schedule, load_rules, record_run, should_throttle
 from decision.engine import EmailInput, classify
 
 
@@ -76,6 +76,12 @@ def run() -> None:
     if not is_within_schedule(rules):
         logger.info("Outside configured schedule window; skipping this run.")
         return
+
+    if should_throttle(rules):
+        logger.info("Within schedule window but skipping: configured run interval hasn't elapsed yet.")
+        return
+
+    record_run()
 
     connector = _load_connector(settings.ACTIVE_CONNECTOR)
 

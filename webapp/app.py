@@ -18,9 +18,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from flask import Flask, redirect, render_template, request, url_for
 
-from config.rules import DAY_NAMES, load_rules, save_rules
+from config.rules import DAY_NAMES, INTERVAL_CHOICES_MINUTES, load_rules, save_rules
 
 app = Flask(__name__)
+
+INTERVAL_LABELS = {
+    0: "Every trigger (10 min, default)",
+    15: "Every 15 minutes",
+    30: "Every 30 minutes",
+    60: "Every hour",
+    120: "Every 2 hours",
+    240: "Every 4 hours",
+}
 
 
 def _criteria_to_text(criteria) -> str:
@@ -61,7 +70,15 @@ def index():
         default_folder=folder_mappings.get("default", ""),
         extra_mappings_text=_mappings_to_text(folder_mappings),
         schedule_enabled=schedule.get("enabled", False),
-        schedule_days=[(day, schedule.get("windows", {}).get(day, "")) for day in DAY_NAMES],
+        schedule_days=[
+            (
+                day,
+                schedule.get("windows", {}).get(day, ""),
+                schedule.get("intervals", {}).get(day, 0),
+            )
+            for day in DAY_NAMES
+        ],
+        interval_choices=[(minutes, INTERVAL_LABELS[minutes]) for minutes in INTERVAL_CHOICES_MINUTES],
         saved=request.args.get("saved") == "1",
     )
 
@@ -78,9 +95,17 @@ def save():
     folder_mappings["default"] = default_folder or rules["folder_mappings"].get("default", "")
     rules["folder_mappings"] = folder_mappings
 
+    intervals = {}
+    for day in DAY_NAMES:
+        try:
+            intervals[day] = int(request.form.get(f"schedule_interval_{day}", "0") or 0)
+        except ValueError:
+            intervals[day] = 0
+
     rules["schedule"] = {
         "enabled": request.form.get("schedule_enabled") == "on",
         "windows": {day: request.form.get(f"schedule_{day}", "").strip() for day in DAY_NAMES},
+        "intervals": intervals,
     }
 
     save_rules(rules)
