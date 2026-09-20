@@ -7,7 +7,9 @@ work identically fed content from a different connector.
 
 Classification judgement (is this HR-related, what to do with any
 attachment) is delegated to the Claude API rather than keyword/filename
-matching.
+matching. The prompt text, HR criteria, and folder-mapping rules used to
+build that judgement live in config/rules.json (config.rules), not here,
+so they can be edited from the control panel without touching this file.
 """
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
@@ -15,6 +17,7 @@ from typing import Any, Dict, List
 import anthropic
 
 from config import settings
+from config.rules import load_rules
 
 
 @dataclass
@@ -30,67 +33,66 @@ class Decision:
     is_hr_related: bool
     action: str  # "none" | "save_attachments" | "flag_for_review"
     attachments_to_save: List[str] = field(default_factory=list)
+    folder_category: str = "default"
     reasoning: str = ""
 
 
-_CLASSIFY_TOOL = {
-    "name": "submit_hr_triage_decision",
-    "description": "Submit the triage decision for a single email.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "is_hr_related": {
-                "type": "boolean",
-                "description": (
-                    "True if the email concerns HR matters -- e.g. recruitment, "
-                    "onboarding, payroll, benefits, leave requests, employee "
-                    "relations, policy, or disciplinary matters."
-                ),
-            },
-            "action": {
-                "type": "string",
-                "enum": ["none", "save_attachments", "flag_for_review"],
-                "description": "What the agent should do next.",
-            },
-            "attachments_to_save": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": (
-                    "Filenames, taken from the provided attachment list, that "
-                    "should be saved to the HR output folder. Empty if none."
-                ),
-            },
-            "reasoning": {
-                "type": "string",
-                "description": (
-                    "One or two sentences explaining the decision, referencing "
-                    "the specific content that drove it. This is logged for "
-                    "audit, so it must stand on its own."
-                ),
-            },
-        },
-        "required": ["is_hr_related", "action", "attachments_to_save", "reasoning"],
-    },
-}
+def _build_system_prompt(rules: Dict[str, Any]) -> str:
+    criteria_bullets = "\n".join(f"- {c}" for c in rules.get("hr_criteria", []))
+    return rules.get("classification_prompt", "").replace("{criteria}", criteria_bullets)
 
-_SYSTEM_PROMPT = (
-    "You are an HR triage assistant reviewing one email at a time from a "
-    "shared inbox. You are given its subject, sender, body, and a list of "
-    "attachment filenames (not the attachment contents). Decide:\n"
-    "1. Whether the email is HR-related (recruitment, onboarding, payroll, "
-    "benefits, leave, employee relations, policy, disciplinary matters, etc).\n"
-    "2. What should happen next: 'none' if no action is needed, "
-    "'save_attachments' if the email is HR-related and it has an attachment "
-    "worth keeping (e.g. a CV, contract, signed form, ID document), or "
-    "'flag_for_review' if it is HR-related but needs a human to look at it "
-    "rather than an automatic action.\n"
-    "Only list a filename in attachments_to_save if it is HR-related and "
-    "plausibly worth keeping -- do not save attachments from unrelated or "
-    "promotional email just because one is present.\n"
-    "Always call the submit_hr_triage_decision tool with your answer, and "
-    "make the reasoning specific enough that someone auditing the log later "
-    "can see why you decided what you did."
-)
+
+def _build_classify_tool(rules: Dict[str, Any]) -> Dict[str, Any]:
+    folder_categories = list(rules.get("folder_mappings", {}).keys()) or ["default"]
+    return {
+        "name": "submit_hr_triage_decision",
+        "description": "Submit the triage decision for a single email.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "is_hr_related": {
+                    "type": "boolean",
+                    "description": "True if the email meets the configured HR criteria.",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["none", "save_attachments", "flag_for_review"],
+                    "description": "What the agent should do next.",
+                },
+                "attachments_to_save": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Filenames, taken from the provided attachment list, that "
+                        "should be saved. Empty if none."
+                    ),
+                },
+                "folder_category": {
+                    "type": "string",
+                    "enum": folder_categories,
+                    "description": (
+                        "Which configured folder category attachments_to_save "
+                        "belong in. Ignored when attachments_to_save is empty."
+                    ),
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": (
+                        "One or two sentences explaining the decision, referencing "
+                        "the specific content that drove it. This is logged for "
+                        "audit, so it must stand on its own."
+                    ),
+                },
+            },
+            "required": [
+                "is_hr_related",
+                "action",
+                "attachments_to_save",
+                "folder_category",
+                "reasoning",
+            ],
+        },
+    }
 
 
 def _build_user_message(email: EmailInput) -> str:
@@ -108,6 +110,7 @@ def _decision_from_tool_input(data: Dict[str, Any]) -> Decision:
         is_hr_related=bool(data.get("is_hr_related", False)),
         action=data.get("action", "none"),
         attachments_to_save=list(data.get("attachments_to_save", [])),
+        folder_category=data.get("folder_category", "default"),
         reasoning=data.get("reasoning", ""),
     )
 
@@ -119,13 +122,17 @@ def classify(email: EmailInput) -> Decision:
             "ANTHROPIC_API_KEY is not set; the decision layer cannot call Claude."
         )
 
+    rules = load_rules()
+    system_prompt = _build_system_prompt(rules)
+    classify_tool = _build_classify_tool(rules)
+
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     response = client.messages.create(
         model=settings.CLAUDE_MODEL,
         max_tokens=1024,
-        system=_SYSTEM_PROMPT,
-        tools=[_CLASSIFY_TOOL],
+        system=system_prompt,
+        tools=[classify_tool],
         tool_choice={"type": "tool", "name": "submit_hr_triage_decision"},
         messages=[{"role": "user", "content": _build_user_message(email)}],
     )

@@ -8,6 +8,10 @@ venv/
 config/credentials.json
 config/token.json
 
+# Mutable runtime config edited via the control panel -- auto-created
+# with defaults by config/rules.py on first use of either app.
+config/rules.json
+
 # Runtime output
 logs/
 output/

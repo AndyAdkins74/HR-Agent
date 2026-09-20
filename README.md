@@ -15,15 +15,22 @@ The project is split into three layers that must stay separated:
   `flag_for_review()`, `remove_label_from_matching()`.
 - **Decision layer** (`decision/engine.py`) -- takes plain email content
   (subject, sender, body, attachment filenames) and returns a
-  `Decision` (is it HR-related, what action to take, why). Calls the
-  Claude API for the actual judgement. Has zero knowledge of Gmail.
-- **Configuration layer** (`config/settings.py`) -- all credentials
-  paths, folder paths, and the active connector selection. Read via
-  environment variables with local defaults; nothing environment
-  specific is hard-coded in the other two layers.
+  `Decision` (is it HR-related, what action to take, which folder
+  category, why). Calls the Claude API for the actual judgement, built
+  from the prompt/criteria/folder rules in `config/rules.json`. Has
+  zero knowledge of Gmail.
+- **Configuration layer** (`config/settings.py` + `config/rules.py`) --
+  `settings.py` holds credentials paths, folder paths, and the active
+  connector selection, read via environment variables. `rules.py` holds
+  the mutable behavioural configuration (classification prompt, HR
+  criteria, folder mappings) as JSON in `config/rules.json`, edited
+  either by hand or via the control panel web app. Nothing environment-
+  or behaviour-specific is hard-coded in the connection or decision
+  layers.
 
 `main.py` wires the three together into one triage run and writes the
-audit log.
+audit log. `webapp/app.py` is a separate, second app for editing
+`config/rules.json` -- see **Control panel** below.
 
 ## Setup
 
@@ -84,8 +91,9 @@ python main.py
 This fetches unlabelled inbox emails (see `GMAIL_QUERY` below),
 classifies each one, and depending on the decision layer's `action`:
 
-- `save_attachments` -- downloads the flagged attachment(s) to
-  `ATTACHMENT_OUTPUT_DIR`.
+- `save_attachments` -- downloads the flagged attachment(s) to the
+  folder mapped to the decision's `folder_category` in
+  `config/rules.json` (falling back to the `default` category).
 - `flag_for_review` -- applies the `HR-Agent-NeedsReview` label so the
   email is visible to a human in Gmail, not just in the log.
 - `none` -- no action.
@@ -124,6 +132,10 @@ All of the below are environment variables with defaults in
 | `ANTHROPIC_API_KEY` | (required) | Claude API key. |
 | `CLAUDE_MODEL` | `claude-sonnet-5` | Model used for classification. |
 | `HR_AGENT_LOG_PATH` | `logs/decisions.log` | Audit log location. |
+| `HR_AGENT_RULES_PATH` | `config/rules.json` | Classification prompt / HR criteria / folder mappings, editable via the control panel. |
+
+The behavioural rules (`config/rules.json`) are separate from the above
+-- see **Control panel**.
 
 ## Audit log
 
@@ -135,16 +147,47 @@ acted on it, e.g.:
 2026-09-19T12:34:58Z | msg_id=18d30... | from=newsletter@vendor.com | subject=This week's deals | hr_related=False | decided_action=none | action_taken=no_action | reasoning=Marketing newsletter, unrelated to HR matters; no action taken.
 ```
 
-## Known limitation of this build session
+## Control panel
 
-This code was written and reviewed in an environment with no browser
-and no Gmail/Claude credentials, so the end-to-end run against a real
-inbox has not yet been executed here -- you'll need to run through
-Setup steps 2-5 yourself and confirm the loop behaves as expected
-before we iterate further.
+A separate, lightweight local web app for editing the classification
+prompt, HR criteria, and folder-mapping rules without touching Python.
+It reads and writes `config/rules.json` -- the same file the decision
+layer reads on every classification call -- so:
 
-## Next step (once you've reviewed this)
+- It never needs `main.py` (the agent) running.
+- The agent never needs it running: `main.py` just reads whatever is
+  currently in `config/rules.json`, so edits saved here take effect on
+  the agent's very next run.
 
-A local web control panel to edit the classification prompt, HR
-criteria, and folder-mapping rules without touching Python -- planned
-as a second, independent app once this loop is confirmed working.
+Run it with:
+
+```bash
+python webapp/app.py
+```
+
+then open <http://127.0.0.1:5151/>. The form has three parts:
+
+- **Classification prompt** -- the instructions given to Claude for
+  every email. Use the literal text `{criteria}` where the HR criteria
+  list below should be inserted.
+- **HR criteria** -- one per line; what counts as HR-related.
+- **Folder mappings** -- a default output folder, plus optional
+  additional named categories (`category = folder/path`, one per
+  line). The classifier picks one of these category names whenever it
+  decides to save an attachment, so e.g. CVs and payslips can land in
+  different folders.
+
+`config/rules.json` is git-ignored (it's local runtime state, not a
+secret) and is created automatically with sensible defaults the first
+time either `main.py` or the control panel runs, if it doesn't already
+exist.
+
+## Status
+
+Both the core triage loop and this control panel have been built and
+reviewed. The end-to-end loop (fetch, classify, act, label, log) has
+been run against a real test Gmail inbox and its output confirmed. The
+control panel has not yet been run against a real inbox, since this
+build session has no browser and no Gmail/Claude credentials -- run
+through the steps above and confirm an edited prompt/criteria/folder
+mapping actually changes the next `python main.py` run's behaviour.

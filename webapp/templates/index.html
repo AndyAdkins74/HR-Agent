@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HR-Agent Control Panel</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      max-width: 760px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+    fieldset { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1.5rem; padding: 1rem 1.25rem; }
+    legend { font-weight: 600; padding: 0 0.4rem; }
+    label { display: block; font-weight: 600; margin: 0.9rem 0 0.25rem; }
+    small { color: #666; }
+    textarea, input[type=text] {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.9rem;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    textarea { resize: vertical; }
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 0.6rem 1.4rem;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: #1662c4; }
+    .banner {
+      background: #e6f4ea;
+      border: 1px solid #34a853;
+      color: #1e4620;
+      padding: 0.6rem 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>HR-Agent Control Panel</h1>
+  <p><small>Edits here are saved to <code>config/rules.json</code> and read by the agent on its next run &mdash; neither app needs the other running.</small></p>
+
+  {% if saved %}
+    <div class="banner">Saved.</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('save') }}">
+    <fieldset>
+      <legend>Classification prompt</legend>
+      <label for="classification_prompt">Instructions given to Claude for every email</label>
+      <small>Use <code>{criteria}</code> where the HR criteria list below should be inserted.</small>
+      <textarea id="classification_prompt" name="classification_prompt" rows="14">{{ classification_prompt }}</textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>HR criteria</legend>
+      <label for="hr_criteria">One per line &mdash; what counts as HR-related</label>
+      <textarea id="hr_criteria" name="hr_criteria" rows="8">{{ hr_criteria_text }}</textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Folder mappings</legend>
+      <label for="default_folder">Default output folder</label>
+      <input type="text" id="default_folder" name="default_folder" value="{{ default_folder }}">
+
+      <label for="extra_mappings">Additional categories (one per line: <code>category = folder/path</code>)</label>
+      <small>The classifier picks one of these category names when it saves an attachment.</small>
+      <textarea id="extra_mappings" name="extra_mappings" rows="6" placeholder="recruitment = output/hr_attachments/recruitment&#10;payroll = output/hr_attachments/payroll">{{ extra_mappings_text }}</textarea>
+    </fieldset>
+
+    <button type="submit">Save</button>
+  </form>
+</body>
+</html>

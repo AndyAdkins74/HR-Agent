@@ -14,6 +14,7 @@ from pathlib import Path
 from types import ModuleType
 
 from config import settings
+from config.rules import load_rules
 from decision.engine import EmailInput, classify
 
 
@@ -98,14 +99,18 @@ def run() -> None:
 
         actions_taken = []
         if decision.action == "save_attachments" and decision.attachments_to_save:
+            folder_mappings = load_rules().get("folder_mappings", {})
+            output_dir = folder_mappings.get(decision.folder_category, folder_mappings.get("default"))
             attachments_by_name = {a.filename: a for a in email.attachments}
             for filename in decision.attachments_to_save:
                 attachment = attachments_by_name.get(filename)
                 if attachment is None:
                     actions_taken.append(f"skip_missing:{filename}")
                     continue
-                saved_path = connector.save_attachment(email.message_id, attachment)
-                actions_taken.append(f"saved:{os.path.basename(saved_path)}")
+                saved_path = connector.save_attachment(email.message_id, attachment, output_dir=output_dir)
+                actions_taken.append(
+                    f"saved:{os.path.basename(saved_path)}(category={decision.folder_category})"
+                )
         elif decision.action == "flag_for_review":
             connector.flag_for_review(email.message_id)
             actions_taken.append("flagged_for_review")
