@@ -4,8 +4,13 @@
   launchd job that runs main.py every 10 minutes.
 
   Paths below are absolute, matching this project's location on
-  andrewadkins's Mac (~/Documents/hr-agent). If you move the project,
-  update ProgramArguments, WorkingDirectory, StandardOutPath, and
+  andrewadkins's Mac (~/hr-agent, not ~/Documents/hr-agent, since
+  launchd jobs cannot reliably read ~/Documents, ~/Desktop or
+  ~/Downloads: those are TCC-protected, and only apps like Terminal.app
+  that a person explicitly grants access to can read them there; a bare
+  launchd job has no such grant and fails with PermissionError on any
+  file inside them). If you move the project again, update
+  ProgramArguments, WorkingDirectory, StandardOutPath, and
   StandardErrorPath to match: launchd does not expand ~ or $HOME.
 
   main.py's own schedule.enabled setting (edited via the control panel,
@@ -20,12 +25,12 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/andrewadkins/Documents/hr-agent/.venv/bin/python3</string>
-        <string>/Users/andrewadkins/Documents/hr-agent/main.py</string>
+        <string>/Users/andrewadkins/hr-agent/.venv/bin/python3</string>
+        <string>/Users/andrewadkins/hr-agent/main.py</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/andrewadkins/Documents/hr-agent</string>
+    <string>/Users/andrewadkins/hr-agent</string>
 
     <!-- Seconds between runs. -->
     <key>StartInterval</key>
@@ -36,9 +41,9 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/andrewadkins/Documents/hr-agent/logs/launchd.out.log</string>
+    <string>/Users/andrewadkins/hr-agent/logs/launchd.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/andrewadkins/Documents/hr-agent/logs/launchd.err.log</string>
+    <string>/Users/andrewadkins/hr-agent/logs/launchd.err.log</string>
 </dict>
 </plist>

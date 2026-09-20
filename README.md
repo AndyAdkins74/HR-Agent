@@ -207,11 +207,21 @@ launchctl load ~/Library/LaunchAgents/com.hragent.triage.plist
 ```
 
 This runs `main.py` once immediately, then every 10 minutes, using the
-absolute paths baked into the plist (`~/Documents/hr-agent`) -- edit
+absolute paths baked into the plist (`~/hr-agent`) -- edit
 `launchd/com.hragent.triage.plist` first if your checkout lives
 somewhere else, since launchd does not expand `~` or environment
 variables. It reads `ANTHROPIC_API_KEY` from `.env` (see step 4 above),
 so make sure that's set up before loading it.
+
+**The project must not live inside `~/Documents`, `~/Desktop`, or
+`~/Downloads`.** macOS TCC-protects those folders; Terminal.app has
+almost certainly been granted access to them for your interactive runs,
+but a bare `launchd` job is a separate process with no such grant, and
+fails immediately with a `PermissionError` reading any file inside them
+(visible in `logs/launchd.err.log`, not `logs/decisions.log`, since it
+happens before Python even finishes starting up). Keep the checkout
+directly under your home directory (`~/hr-agent`) or another
+non-protected location instead.
 
 Check it's running and see its output:
 
