@@ -106,6 +106,9 @@ def run() -> None:
                     continue
                 saved_path = connector.save_attachment(email.message_id, attachment)
                 actions_taken.append(f"saved:{os.path.basename(saved_path)}")
+        elif decision.action == "flag_for_review":
+            connector.flag_for_review(email.message_id)
+            actions_taken.append("flagged_for_review")
 
         action_taken_summary = "; ".join(actions_taken) if actions_taken else "no_action"
         _log_decision(logger, email, decision, action_taken_summary)

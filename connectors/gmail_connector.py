@@ -182,3 +182,47 @@ def mark_processed(message_id: str, label_name: Optional[str] = None) -> None:
     service.users().messages().modify(
         userId="me", id=message_id, body={"addLabelIds": [label_id]}
     ).execute()
+
+
+def flag_for_review(message_id: str, label_name: Optional[str] = None) -> None:
+    """Apply the needs-review label so a flagged email is visible in Gmail
+    itself, not just in the decision log."""
+    service = _service()
+    label_name = settings.GMAIL_REVIEW_LABEL if label_name is None else label_name
+    label_id = _get_or_create_label(service, label_name)
+    service.users().messages().modify(
+        userId="me", id=message_id, body={"addLabelIds": [label_id]}
+    ).execute()
+
+
+def remove_label_from_matching(label_name: str, query: Optional[str] = None) -> int:
+    """Remove `label_name` from every message currently carrying it (optionally
+    narrowed by `query`). Used to force re-triage of previously seen emails
+    after the classification prompt/criteria change. Returns the number of
+    messages updated."""
+    service = _service()
+    labels = service.users().labels().list(userId="me").execute().get("labels", [])
+    label_id = next((label["id"] for label in labels if label["name"] == label_name), None)
+    if label_id is None:
+        return 0
+
+    search_query = f"label:{label_name}" if query is None else f"{query} label:{label_name}"
+    updated = 0
+    page_token = None
+    while True:
+        list_kwargs = {"userId": "me", "q": search_query}
+        if page_token:
+            list_kwargs["pageToken"] = page_token
+        response = service.users().messages().list(**list_kwargs).execute()
+
+        for ref in response.get("messages", []):
+            service.users().messages().modify(
+                userId="me", id=ref["id"], body={"removeLabelIds": [label_id]}
+            ).execute()
+            updated += 1
+
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    return updated

@@ -11,7 +11,8 @@ The project is split into three layers that must stay separated:
 
 - **Connection layer** (`connectors/gmail_connector.py`) -- the only
   module that knows about Gmail, OAuth, or the Google API client.
-  Exposes `get_emails()`, `save_attachment()`, `mark_processed()`.
+  Exposes `get_emails()`, `save_attachment()`, `mark_processed()`,
+  `flag_for_review()`, `remove_label_from_matching()`.
 - **Decision layer** (`decision/engine.py`) -- takes plain email content
   (subject, sender, body, attachment filenames) and returns a
   `Decision` (is it HR-related, what action to take, why). Calls the
@@ -81,10 +82,29 @@ python main.py
 ```
 
 This fetches unlabelled inbox emails (see `GMAIL_QUERY` below),
-classifies each one, saves any attachments the decision layer flags,
-labels each processed email `HR-Agent-Processed` in Gmail so it isn't
-re-triaged next run, and appends one line per email to
-`logs/decisions.log`.
+classifies each one, and depending on the decision layer's `action`:
+
+- `save_attachments` -- downloads the flagged attachment(s) to
+  `ATTACHMENT_OUTPUT_DIR`.
+- `flag_for_review` -- applies the `HR-Agent-NeedsReview` label so the
+  email is visible to a human in Gmail, not just in the log.
+- `none` -- no action.
+
+Every classified email -- regardless of action -- is labelled
+`HR-Agent-Processed` in Gmail so it isn't re-fetched next run, and gets
+one line appended to `logs/decisions.log`.
+
+`HR-Agent-Processed` is a dedup marker ("seen"), not a record of
+whether the agent acted. If you change the classification prompt or
+criteria and want previously seen emails reconsidered, run:
+
+```bash
+python scripts/reset_processed_label.py
+```
+
+This removes the label from matching emails so the next `python
+main.py` run re-classifies them. Pass `--query` to narrow it (e.g. to a
+date range) or `--label` to reset `HR-Agent-NeedsReview` instead.
 
 ## Configuration
 
@@ -96,7 +116,8 @@ All of the below are environment variables with defaults in
 | `HR_AGENT_CONNECTOR` | `gmail` | Which connector implementation to use. |
 | `GMAIL_CREDENTIALS_PATH` | `config/credentials.json` | OAuth client secret file. |
 | `GMAIL_TOKEN_PATH` | `config/token.json` | Cached OAuth token. |
-| `GMAIL_PROCESSED_LABEL` | `HR-Agent-Processed` | Gmail label applied after triage. |
+| `GMAIL_PROCESSED_LABEL` | `HR-Agent-Processed` | Gmail label applied to every classified email (dedup marker). |
+| `GMAIL_REVIEW_LABEL` | `HR-Agent-NeedsReview` | Gmail label applied when the decision is `flag_for_review`. |
 | `GMAIL_QUERY` | `in:inbox -label:HR-Agent-Processed` | Gmail search query for emails to fetch. |
 | `GMAIL_MAX_RESULTS` | `20` | Max emails fetched per run. |
 | `ATTACHMENT_OUTPUT_DIR` | `output/hr_attachments` | Where saved attachments land. |

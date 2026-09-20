@@ -31,7 +31,16 @@ GMAIL_TOKEN_PATH = os.environ.get(
 # "processed" label below. It does not allow permanent deletion.
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
+# Applied to every email the agent has classified, whether or not it acted
+# on it -- this is a dedup marker ("seen"), not a record of action taken.
+# If you change the classification prompt/criteria and want previously
+# seen emails reconsidered, run scripts/reset_processed_label.py rather
+# than editing this label by hand.
 GMAIL_PROCESSED_LABEL = os.environ.get("GMAIL_PROCESSED_LABEL", "HR-Agent-Processed")
+# Applied in addition to the above when the decision layer returns
+# action="flag_for_review", so a flagged email is visible in Gmail itself
+# rather than only in the log file.
+GMAIL_REVIEW_LABEL = os.environ.get("GMAIL_REVIEW_LABEL", "HR-Agent-NeedsReview")
 GMAIL_QUERY = os.environ.get(
     "GMAIL_QUERY", f"in:inbox -label:{GMAIL_PROCESSED_LABEL}"
 )
