@@ -48,36 +48,148 @@ DAY_NAMES = [
 ]
 
 DEFAULT_RULES: Dict[str, Any] = {
-    "classification_prompt": (
-        "You are an HR triage assistant reviewing one email at a time from a "
-        "shared inbox. You are given its subject, sender, body, and a list of "
-        "attachment filenames (not the attachment contents).\n\n"
-        "An email counts as HR-related if it concerns any of:\n"
-        "{criteria}\n\n"
-        "Decide:\n"
-        "1. Whether the email is HR-related.\n"
-        "2. What should happen next: 'none' if no action is needed, "
-        "'save_attachments' if the email is HR-related and it has an "
-        "attachment worth keeping (e.g. a CV, contract, signed form, ID "
-        "document), or 'flag_for_review' if it is HR-related but needs a "
-        "human to look at it rather than an automatic action.\n"
-        "3. If saving attachments, which folder category they belong in.\n\n"
-        "Only list a filename in attachments_to_save if it is HR-related and "
-        "plausibly worth keeping -- do not save attachments from unrelated "
-        "or promotional email just because one is present.\n"
-        "Always call the submit_hr_triage_decision tool with your answer, "
-        "and make the reasoning specific enough that someone auditing the "
-        "log later can see why you decided what you did."
+    # Routing prompt: given one email, decide which sub-agent below should
+    # handle it (or "none"). {agents} is replaced at classification time
+    # with a bullet list built from sub_agents' name/description -- do not
+    # hand-edit sub-agent names into this text, since the tool's enum (and
+    # therefore which name Claude is allowed to return) is generated from
+    # the sub_agents list, not from this prompt.
+    "orchestrator_prompt": (
+        "You are the orchestrator for an HR inbox triage system. You are given "
+        "one email's subject, sender, body, and attachment filenames. Decide "
+        "which specialist sub-agent below should handle it, based on what the "
+        "email is actually about -- not just keywords in the subject line.\n\n"
+        "Available sub-agents:\n{agents}\n\n"
+        "If the email isn't HR-related at all (e.g. promotional, a security "
+        "alert, personal correspondence unrelated to work), choose 'none'.\n\n"
+        "Always call the route_to_subagent tool with your choice and a short "
+        "reasoning."
     ),
-    "hr_criteria": [
-        "Recruitment and hiring",
-        "Onboarding",
-        "Payroll",
-        "Benefits",
-        "Leave requests",
-        "Employee relations",
-        "Policy",
-        "Disciplinary matters",
+    # Each sub-agent's prompt is fully self-contained (its own complete set
+    # of instructions, not a fragment appended to something shared) so it
+    # can be edited independently in the control panel without affecting
+    # any other sub-agent. It is used as the system prompt for the second,
+    # sub-agent-specific classification call once the orchestrator has
+    # routed an email here.
+    "sub_agents": [
+        {
+            "name": "Recruitment & Onboarding",
+            "description": "Hiring, interviews, candidate CVs, job offers, right-to-work checks, and onboarding of new starters.",
+            "prompt": (
+                "You are the Recruitment & Onboarding specialist within an HR "
+                "triage system, reviewing one email at a time from a shared "
+                "inbox. You are given its subject, sender, body, and a list of "
+                "attachment filenames (not the attachment contents). This email "
+                "has already been routed to you because it appears to concern "
+                "recruitment, hiring, interviews, job offers, or onboarding a "
+                "new employee.\n\n"
+                "Decide:\n"
+                "1. What should happen next: 'none' if no action is needed, "
+                "'save_attachments' if there's an attachment worth keeping "
+                "(e.g. a CV/resume, signed offer letter, right-to-work document, "
+                "or onboarding paperwork), or 'flag_for_review' if it needs a "
+                "human to look at it rather than an automatic action.\n"
+                "2. If saving attachments, which folder category they belong in.\n"
+                "3. If, on closer inspection, this email is not actually "
+                "HR-related after all, set is_hr_related to false and action "
+                "to 'none'.\n\n"
+                "Only list a filename in attachments_to_save if it is plausibly "
+                "worth keeping -- do not save attachments just because one is "
+                "present.\n"
+                "Always call the submit_hr_triage_decision tool with your "
+                "answer, and make the reasoning specific enough that someone "
+                "auditing the log later can see why you decided what you did."
+            ),
+        },
+        {
+            "name": "Payroll & Benefits",
+            "description": "Pay, tax, payslips, pensions, and employee benefits enrollment.",
+            "prompt": (
+                "You are the Payroll & Benefits specialist within an HR triage "
+                "system, reviewing one email at a time from a shared inbox. You "
+                "are given its subject, sender, body, and a list of attachment "
+                "filenames (not the attachment contents). This email has "
+                "already been routed to you because it appears to concern "
+                "payroll, pay, tax, pensions, or employee benefits.\n\n"
+                "Decide:\n"
+                "1. What should happen next: 'none' if no action is needed, "
+                "'save_attachments' if there's an attachment worth keeping "
+                "(e.g. a payslip, P45/P60, pension statement, or benefits "
+                "enrollment form), or 'flag_for_review' if it needs a human to "
+                "look at it rather than an automatic action.\n"
+                "2. If saving attachments, which folder category they belong in.\n"
+                "3. If, on closer inspection, this email is not actually "
+                "HR-related after all, set is_hr_related to false and action "
+                "to 'none'.\n\n"
+                "Only list a filename in attachments_to_save if it is plausibly "
+                "worth keeping -- do not save attachments just because one is "
+                "present.\n"
+                "Always call the submit_hr_triage_decision tool with your "
+                "answer, and make the reasoning specific enough that someone "
+                "auditing the log later can see why you decided what you did."
+            ),
+        },
+        {
+            "name": "Leave & Absence",
+            "description": "Annual leave, sick leave, maternity/paternity leave, and other absence requests.",
+            "prompt": (
+                "You are the Leave & Absence specialist within an HR triage "
+                "system, reviewing one email at a time from a shared inbox. You "
+                "are given its subject, sender, body, and a list of attachment "
+                "filenames (not the attachment contents). This email has "
+                "already been routed to you because it appears to concern an "
+                "employee's leave or absence -- annual leave, sick leave, "
+                "maternity/paternity leave, or a resignation/notice period.\n\n"
+                "Decide:\n"
+                "1. What should happen next: 'none' if no action is needed, "
+                "'save_attachments' if there's an attachment worth keeping (e.g. "
+                "a signed leave request form or medical certificate), or "
+                "'flag_for_review' if it needs a human to review and "
+                "acknowledge -- lean towards flag_for_review for anything that "
+                "needs approval or a personal response, rather than treating "
+                "silence as the safe default.\n"
+                "2. If saving attachments, which folder category they belong in.\n"
+                "3. If, on closer inspection, this email is not actually "
+                "HR-related after all, set is_hr_related to false and action "
+                "to 'none'.\n\n"
+                "Only list a filename in attachments_to_save if it is plausibly "
+                "worth keeping -- do not save attachments just because one is "
+                "present.\n"
+                "Always call the submit_hr_triage_decision tool with your "
+                "answer, and make the reasoning specific enough that someone "
+                "auditing the log later can see why you decided what you did."
+            ),
+        },
+        {
+            "name": "Employee Relations & Policy",
+            "description": "Grievances, disciplinary matters, complaints, and company policy questions or acknowledgements.",
+            "prompt": (
+                "You are the Employee Relations & Policy specialist within an "
+                "HR triage system, reviewing one email at a time from a shared "
+                "inbox. You are given its subject, sender, body, and a list of "
+                "attachment filenames (not the attachment contents). This email "
+                "has already been routed to you because it appears to concern "
+                "employee relations, a grievance, a disciplinary matter, or "
+                "company policy.\n\n"
+                "Decide:\n"
+                "1. What should happen next: 'none' if no action is needed, "
+                "'save_attachments' if there's an attachment worth keeping (e.g. "
+                "a signed policy acknowledgement or grievance letter), or "
+                "'flag_for_review' if it needs a human to look at it -- these "
+                "are sensitive matters, so default to flag_for_review unless "
+                "the email is purely informational with nothing to act on.\n"
+                "2. If saving attachments, which folder category they belong in.\n"
+                "3. If, on closer inspection, this email is not actually "
+                "HR-related after all, set is_hr_related to false and action "
+                "to 'none'.\n\n"
+                "Only list a filename in attachments_to_save if it is plausibly "
+                "worth keeping -- do not save attachments just because one is "
+                "present.\n"
+                "Always call the submit_hr_triage_decision tool with your "
+                "answer, and make the reasoning specific enough that someone "
+                "auditing the log later can see why you decided what you did."
+            ),
+        },
     ],
     "folder_mappings": {
         "default": settings.ATTACHMENT_OUTPUT_DIR,
@@ -126,6 +238,26 @@ def load_rules() -> Dict[str, Any]:
     merged.update(rules)
     if "default" not in merged.get("folder_mappings", {}):
         merged["folder_mappings"]["default"] = DEFAULT_RULES["folder_mappings"]["default"]
+
+    # A rules.json from before the orchestrator/sub-agent model (which had
+    # classification_prompt + hr_criteria instead) still carries those two
+    # keys once merged in above -- drop them rather than leave dead config
+    # sitting alongside the new fields it's been replaced by.
+    merged.pop("classification_prompt", None)
+    merged.pop("hr_criteria", None)
+
+    sub_agents = merged.get("sub_agents")
+    if not isinstance(sub_agents, list) or not sub_agents:
+        sub_agents = _deep_copy(DEFAULT_RULES["sub_agents"])
+    merged["sub_agents"] = [
+        {
+            "name": agent.get("name", ""),
+            "description": agent.get("description", ""),
+            "prompt": agent.get("prompt", ""),
+        }
+        for agent in sub_agents
+        if isinstance(agent, dict) and agent.get("name", "").strip()
+    ]
 
     schedule = merged.get("schedule", {})
     windows = schedule.get("windows", {})
@@ -196,53 +328,6 @@ def is_within_schedule(rules: Dict[str, Any], now: Optional[dt.datetime] = None)
         if start <= now.time() <= end:
             return True
     return False
-
-
-def _load_last_run_at() -> Optional[dt.datetime]:
-    if not SCHEDULE_STATE_PATH.exists():
-        return None
-    try:
-        with open(SCHEDULE_STATE_PATH, "r", encoding="utf-8") as f:
-            state = json.load(f)
-        return dt.datetime.fromisoformat(state["last_run_at"])
-    except (json.JSONDecodeError, KeyError, ValueError, OSError):
-        return None
-
-
-def record_run(now: Optional[dt.datetime] = None) -> None:
-    """Called once main.py has decided to actually do work, so the next
-    trigger can measure elapsed time against schedule.intervals. Must be
-    called at most once per real run -- not on runs skipped by
-    is_within_schedule/should_throttle -- or the interval would never
-    have a chance to elapse."""
-    now = now or dt.datetime.now()
-    SCHEDULE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(SCHEDULE_STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump({"last_run_at": now.isoformat()}, f)
-
-
-def should_throttle(rules: Dict[str, Any], now: Optional[dt.datetime] = None) -> bool:
-    """True if today's configured interval hasn't elapsed since the last
-    real run yet, so this trigger should be skipped even though it falls
-    inside today's window. This is independent of how often the
-    scheduler (e.g. launchd, every 10 minutes) actually triggers main.py
-    -- it throttles on top of that, it doesn't replace it."""
-    schedule = rules.get("schedule", {})
-    if not schedule.get("enabled", False):
-        return False
-
-    now = now or dt.datetime.now()
-    day_name = DAY_NAMES[now.weekday()]
-    interval_minutes = schedule.get("intervals", {}).get(day_name, 0) or 0
-    if interval_minutes <= 0:
-        return False
-
-    last_run = _load_last_run_at()
-    if last_run is None:
-        return False
-
-    elapsed_minutes = (now - last_run).total_seconds() / 60.0
-    return elapsed_minutes < interval_minutes
 
 
 def _load_last_run_at() -> Optional[dt.datetime]:

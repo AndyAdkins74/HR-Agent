@@ -49,6 +49,32 @@
     .schedule-row { display: grid; grid-template-columns: 110px 1fr 190px; align-items: center; gap: 0.75rem; margin: 0.4rem 0; }
     .schedule-row label { margin: 0; font-weight: normal; text-transform: capitalize; }
     .schedule-row select { width: 100%; box-sizing: border-box; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .subagent-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1rem; background: #fafafa; }
+    .subagent-card label { margin: 0.6rem 0 0.25rem; }
+    .subagent-card label:first-child { margin-top: 0; }
+    .subagent-head { display: flex; justify-content: space-between; align-items: center; }
+    .subagent-head span { font-weight: 600; color: #555; }
+    .remove-btn {
+      background: none;
+      border: 1px solid #c5221f;
+      color: #c5221f;
+      padding: 0.25rem 0.7rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .remove-btn:hover { background: #fce8e6; }
+    .add-btn {
+      background: none;
+      border: 1px dashed #1a73e8;
+      color: #1a73e8;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    .add-btn:hover { background: #e8f0fe; }
   </style>
 </head>
 <body>
@@ -61,16 +87,39 @@
 
   <form method="post" action="{{ url_for('save') }}">
     <fieldset>
-      <legend>Classification prompt</legend>
-      <label for="classification_prompt">Instructions given to Claude for every email</label>
-      <small>Use <code>{criteria}</code> where the HR criteria list below should be inserted.</small>
-      <textarea id="classification_prompt" name="classification_prompt" rows="14">{{ classification_prompt }}</textarea>
+      <legend>Orchestrator prompt</legend>
+      <label for="orchestrator_prompt">Instructions Claude uses to pick which sub-agent below should handle each email</label>
+      <small>Use <code>{agents}</code> where the list of sub-agents (name + description) should be inserted. The routing choice is restricted to exactly the sub-agent names configured below, plus "none".</small>
+      <textarea id="orchestrator_prompt" name="orchestrator_prompt" rows="10">{{ orchestrator_prompt }}</textarea>
     </fieldset>
 
     <fieldset>
-      <legend>HR criteria</legend>
-      <label for="hr_criteria">One per line &mdash; what counts as HR-related</label>
-      <textarea id="hr_criteria" name="hr_criteria" rows="8">{{ hr_criteria_text }}</textarea>
+      <legend>Sub-agents</legend>
+      <small>
+        Each sub-agent has its own complete, independent set of instructions &mdash;
+        used as-is when the orchestrator routes an email to it. The name and
+        description are what the orchestrator sees when deciding where to route
+        an email; the prompt is everything that sub-agent is told once it's
+        chosen. At least one sub-agent is required for any email to ever be
+        routed anywhere.
+      </small>
+      <div id="subagent-list">
+        {% for agent in sub_agents %}
+          <div class="subagent-card" data-index="{{ loop.index0 }}">
+            <div class="subagent-head">
+              <span>Sub-agent {{ loop.index }}</span>
+              <button type="button" class="remove-btn" onclick="this.closest('.subagent-card').remove()">Remove</button>
+            </div>
+            <label for="subagent_name_{{ loop.index0 }}">Name</label>
+            <input type="text" id="subagent_name_{{ loop.index0 }}" name="subagent_name_{{ loop.index0 }}" value="{{ agent.name }}" placeholder="e.g. Recruitment & Onboarding">
+            <label for="subagent_description_{{ loop.index0 }}">Description (shown to the orchestrator for routing)</label>
+            <input type="text" id="subagent_description_{{ loop.index0 }}" name="subagent_description_{{ loop.index0 }}" value="{{ agent.description }}" placeholder="e.g. Hiring, interviews, CVs, onboarding">
+            <label for="subagent_prompt_{{ loop.index0 }}">Prompt (full instructions for this sub-agent)</label>
+            <textarea id="subagent_prompt_{{ loop.index0 }}" name="subagent_prompt_{{ loop.index0 }}" rows="10">{{ agent.prompt }}</textarea>
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="add-btn" onclick="addSubagent()">+ Add sub-agent</button>
     </fieldset>
 
     <fieldset>
@@ -114,5 +163,29 @@
 
     <button type="submit">Save</button>
   </form>
+
+  <script>
+    let subagentCount = {{ sub_agents|length }};
+
+    function addSubagent() {
+      const index = subagentCount++;
+      const list = document.getElementById('subagent-list');
+      const card = document.createElement('div');
+      card.className = 'subagent-card';
+      card.innerHTML = `
+        <div class="subagent-head">
+          <span>New sub-agent</span>
+          <button type="button" class="remove-btn" onclick="this.closest('.subagent-card').remove()">Remove</button>
+        </div>
+        <label for="subagent_name_${index}">Name</label>
+        <input type="text" id="subagent_name_${index}" name="subagent_name_${index}" placeholder="e.g. Recruitment & Onboarding">
+        <label for="subagent_description_${index}">Description (shown to the orchestrator for routing)</label>
+        <input type="text" id="subagent_description_${index}" name="subagent_description_${index}" placeholder="e.g. Hiring, interviews, CVs, onboarding">
+        <label for="subagent_prompt_${index}">Prompt (full instructions for this sub-agent)</label>
+        <textarea id="subagent_prompt_${index}" name="subagent_prompt_${index}" rows="10"></textarea>
+      `;
+      list.appendChild(card);
+    }
+  </script>
 </body>
 </html>

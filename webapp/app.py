@@ -32,14 +32,6 @@ INTERVAL_LABELS = {
 }
 
 
-def _criteria_to_text(criteria) -> str:
-    return "\n".join(criteria)
-
-
-def _text_to_criteria(text: str):
-    return [line.strip() for line in text.splitlines() if line.strip()]
-
-
 def _mappings_to_text(mappings: dict) -> str:
     lines = [f"{category} = {path}" for category, path in mappings.items() if category != "default"]
     return "\n".join(lines)
@@ -65,8 +57,8 @@ def index():
     schedule = rules.get("schedule", {})
     return render_template(
         "index.html",
-        classification_prompt=rules.get("classification_prompt", ""),
-        hr_criteria_text=_criteria_to_text(rules.get("hr_criteria", [])),
+        orchestrator_prompt=rules.get("orchestrator_prompt", ""),
+        sub_agents=rules.get("sub_agents", []),
         default_folder=folder_mappings.get("default", ""),
         extra_mappings_text=_mappings_to_text(folder_mappings),
         schedule_enabled=schedule.get("enabled", False),
@@ -87,8 +79,25 @@ def index():
 def save():
     rules = load_rules()
 
-    rules["classification_prompt"] = request.form.get("classification_prompt", "").strip()
-    rules["hr_criteria"] = _text_to_criteria(request.form.get("hr_criteria", ""))
+    rules["orchestrator_prompt"] = request.form.get("orchestrator_prompt", "").strip()
+
+    indices = sorted(
+        {key[len("subagent_name_"):] for key in request.form if key.startswith("subagent_name_")},
+        key=int,
+    )
+    sub_agents = []
+    for idx in indices:
+        name = request.form.get(f"subagent_name_{idx}", "").strip()
+        if not name:
+            continue
+        sub_agents.append(
+            {
+                "name": name,
+                "description": request.form.get(f"subagent_description_{idx}", "").strip(),
+                "prompt": request.form.get(f"subagent_prompt_{idx}", "").strip(),
+            }
+        )
+    rules["sub_agents"] = sub_agents
 
     default_folder = request.form.get("default_folder", "").strip()
     folder_mappings = _text_to_mappings(request.form.get("extra_mappings", ""))

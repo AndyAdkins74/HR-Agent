@@ -57,11 +57,12 @@ def _sanitize(text: str) -> str:
 
 def _log_decision(logger: logging.Logger, email, decision, action_taken: str) -> None:
     logger.info(
-        "msg_id=%s | from=%s | subject=%s | hr_related=%s | decided_action=%s | "
+        "msg_id=%s | from=%s | subject=%s | subagent=%s | hr_related=%s | decided_action=%s | "
         "action_taken=%s | reasoning=%s",
         email.message_id,
         _sanitize(email.sender),
         _sanitize(email.subject) or "(no subject)",
+        decision.subagent,
         decision.is_hr_related,
         decision.action,
         action_taken,
@@ -100,7 +101,7 @@ def run() -> None:
             decision = classify(email_input)
         except Exception as exc:  # decision layer failure must not kill the run or go unlogged
             logger.info(
-                "msg_id=%s | from=%s | subject=%s | hr_related=UNKNOWN | "
+                "msg_id=%s | from=%s | subject=%s | subagent=UNKNOWN | hr_related=UNKNOWN | "
                 "decided_action=none | action_taken=classification_failed | reasoning=%s",
                 email.message_id,
                 _sanitize(email.sender),
